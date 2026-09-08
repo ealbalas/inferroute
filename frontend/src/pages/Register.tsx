@@ -17,8 +17,8 @@ export default function Register() {
       const res = await axios.post('/v1/auth/register', { email, password })
       localStorage.setItem('token', res.data.token)
       navigate('/')
-    } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Registration failed.')
+    } catch (err) {
+      setError(axios.isAxiosError(err) ? (err.response?.data?.error ?? 'Registration failed.') : 'Registration failed.')
     } finally {
       setLoading(false)
     }
