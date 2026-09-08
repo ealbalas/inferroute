@@ -86,7 +86,9 @@ The Gin context key `"userID"` is set by both paths and read by all handlers.
 
 ### Database
 
-Schema lives in `internal/database/migrations/001_initial.sql`. Docker Compose mounts this as an init script so Postgres runs it automatically on first start. For subsequent runs use `make migrate`.
+Initial schema lives in `internal/database/migrations/001_initial.sql`; Docker Compose mounts this as an init script so Postgres runs it automatically on first start.
+`002_add_key_hash_fast.sql` adds the `key_hash_fast` column and unique index to `api_keys`; the `APIKeyAuth` middleware requires this column for its SHA-256 index lookup.
+Run `make migrate` to apply all migrations against a running Postgres instance.
 
 Seven tables: `users`, `api_keys`, `workers`, `requests`, `routing_decisions`, `usage_metrics`, `incidents`. Workers are seeded with the three Docker Compose worker addresses.
 
