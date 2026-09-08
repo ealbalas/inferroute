@@ -58,14 +58,14 @@ func Generate(db *database.Pool, redis *cache.Client, routerURL string) gin.Hand
 				resp.Cached = true
 				resp.LatencyMS = time.Since(start).Milliseconds()
 				c.JSON(http.StatusOK, resp)
-				recordRequest(c, db, userID.(string), "", req.Model, 200,
+				recordRequest(c, db, userID.(string), req.Model, 200,
 					int(resp.LatencyMS), resp.Tokens, resp.Cost, true)
 				return
 			}
 		}
 
 		// ── 2. Ask router for the best worker ─────────────────────────────────
-		routeResp, workerAddr, err := callRouter(routerURL, req)
+		_, workerAddr, err := callRouter(routerURL, req)
 		if err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no healthy workers: " + err.Error()})
 			return
@@ -88,7 +88,7 @@ func Generate(db *database.Pool, redis *cache.Client, routerURL string) gin.Hand
 		}
 
 		// ── 5. Persist request record ─────────────────────────────────────────
-		recordRequest(c, db, userID.(string), routeResp.WorkerName, req.Model,
+		recordRequest(c, db, userID.(string), req.Model,
 			statusCode, int(workerResp.LatencyMS), workerResp.Tokens, workerResp.Cost, false)
 
 		c.JSON(http.StatusOK, workerResp)
@@ -134,7 +134,7 @@ func callWorker(workerAddr string, req generateRequest) (*generateResponse, int,
 	return &result, resp.StatusCode, nil
 }
 
-func recordRequest(c *gin.Context, db *database.Pool, userID, workerName, model string,
+func recordRequest(c *gin.Context, db *database.Pool, userID, model string,
 	statusCode, latencyMS int, tokens int, cost float64, cached bool) {
 
 	_, _ = db.Exec(c.Request.Context(), `

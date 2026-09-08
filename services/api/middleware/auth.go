@@ -1,21 +1,21 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/inferroute/inferroute/internal/auth"
+	"github.com/inferroute/inferroute/internal/database"
 )
 
 const userIDKey = "userID"
 
 // APIKeyAuth validates Bearer ir_live_* tokens against the database.
-// It sets "userID" in the Gin context on success.
-//
-// In a real implementation this queries the api_keys table using FastKeyHash
-// for the index lookup, then bcrypt-validates the full key.
-func APIKeyAuth() gin.HandlerFunc {
+// It performs a fast SHA-256 index lookup then bcrypt verification,
+// and sets "userID" in the Gin context on success.
+func APIKeyAuth(db *database.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
 		if !strings.HasPrefix(header, "Bearer ") {
@@ -29,11 +29,29 @@ func APIKeyAuth() gin.HandlerFunc {
 			return
 		}
 
-		// TODO: look up api_keys by FastKeyHash(raw), then call auth.ValidateAPIKey(raw, row.KeyHash)
-		_ = auth.FastKeyHash(raw)
+		fastHash := auth.FastKeyHash(raw)
 
-		// Placeholder: set a synthetic user ID until DB lookup is wired up
-		c.Set(userIDKey, "user_placeholder")
+		var keyID, userID, storedHash string
+		err := db.QueryRow(c.Request.Context(), `
+			SELECT id, user_id, key_hash FROM api_keys WHERE key_hash_fast = $1
+		`, fastHash).Scan(&keyID, &userID, &storedHash)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
+			return
+		}
+
+		if !auth.ValidateAPIKey(raw, storedHash) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
+			return
+		}
+
+		c.Set(userIDKey, userID)
+
+		// Best-effort, non-blocking update of last_used_at.
+		go func() {
+			_, _ = db.Exec(context.Background(), `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`, keyID)
+		}()
+
 		c.Next()
 	}
 }

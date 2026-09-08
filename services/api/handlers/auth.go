@@ -87,17 +87,23 @@ func ListAPIKeys(db *database.Pool) gin.HandlerFunc {
 		defer rows.Close()
 
 		type keyRow struct {
-			ID         string  `json:"id"`
-			Name       string  `json:"name"`
-			LastUsedAt *string `json:"last_used_at"`
-			CreatedAt  string  `json:"created_at"`
+			ID         string     `json:"id"`
+			Name       string     `json:"name"`
+			LastUsedAt *time.Time `json:"last_used_at"`
+			CreatedAt  time.Time  `json:"created_at"`
 		}
 		var keys []keyRow
 		for rows.Next() {
 			var k keyRow
-			if err := rows.Scan(&k.ID, &k.Name, &k.LastUsedAt, &k.CreatedAt); err == nil {
-				keys = append(keys, k)
+			if err := rows.Scan(&k.ID, &k.Name, &k.LastUsedAt, &k.CreatedAt); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "scan error"})
+				return
 			}
+			keys = append(keys, k)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{"keys": keys})
 	}
@@ -129,11 +135,12 @@ func CreateAPIKey(db *database.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "key hashing failed"})
 			return
 		}
+		fastHash := auth.FastKeyHash(raw)
 
 		keyID := uuid.New().String()
 		_, err = db.Exec(c.Request.Context(), `
-			INSERT INTO api_keys (id, user_id, key_hash, name) VALUES ($1, $2, $3, $4)
-		`, keyID, userID, hashed, req.Name)
+			INSERT INTO api_keys (id, user_id, key_hash, key_hash_fast, name) VALUES ($1, $2, $3, $4, $5)
+		`, keyID, userID, hashed, fastHash, req.Name)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return

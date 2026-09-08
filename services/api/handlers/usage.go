@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/inferroute/inferroute/internal/database"
@@ -26,18 +27,23 @@ func Usage(db *database.Pool) gin.HandlerFunc {
 		defer rows.Close()
 
 		type dayUsage struct {
-			Date         string  `json:"date"`
-			RequestCount int     `json:"request_count"`
-			TotalTokens  int     `json:"total_tokens"`
-			TotalCost    float64 `json:"total_cost"`
+			Date         time.Time `json:"date"`
+			RequestCount int       `json:"request_count"`
+			TotalTokens  int       `json:"total_tokens"`
+			TotalCost    float64   `json:"total_cost"`
 		}
 		var usage []dayUsage
 		for rows.Next() {
 			var d dayUsage
 			if err := rows.Scan(&d.Date, &d.RequestCount, &d.TotalTokens, &d.TotalCost); err != nil {
-				continue
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "scan error"})
+				return
 			}
 			usage = append(usage, d)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{"usage": usage})
 	}
