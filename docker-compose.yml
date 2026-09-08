@@ -1,0 +1,144 @@
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: inferroute
+      POSTGRES_PASSWORD: inferroute
+      POSTGRES_DB: inferroute
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/database/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inferroute"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Workers ───────────────────────────────────────────────────────────────────
+
+  worker-a:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    environment:
+      WORKER_NAME: us-west-1
+      WORKER_PORT: "9001"
+      WORKER_LATENCY_MS: "80"
+      WORKER_ERROR_RATE: "0.02"
+    ports:
+      - "9001:9001"
+
+  worker-b:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    environment:
+      WORKER_NAME: us-west-2
+      WORKER_PORT: "9002"
+      WORKER_LATENCY_MS: "120"
+      WORKER_ERROR_RATE: "0.01"
+    ports:
+      - "9002:9002"
+
+  worker-c:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    environment:
+      WORKER_NAME: us-east-1
+      WORKER_PORT: "9003"
+      WORKER_LATENCY_MS: "200"
+      WORKER_ERROR_RATE: "0.05"
+    ports:
+      - "9003:9003"
+
+  # ── Routing Engine ────────────────────────────────────────────────────────────
+
+  router:
+    build:
+      context: .
+      dockerfile: services/router/Dockerfile
+    environment:
+      ROUTER_PORT: "8081"
+      WORKER_ADDRESSES: "http://worker-a:9001,http://worker-b:9002,http://worker-c:9003"
+    ports:
+      - "8081:8081"
+    depends_on:
+      - worker-a
+      - worker-b
+      - worker-c
+
+  # ── API Gateway ───────────────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://inferroute:inferroute@postgres:5432/inferroute?sslmode=disable"
+      REDIS_URL: "redis://redis:6379"
+      ROUTER_URL: "http://router:8081"
+      JWT_SECRET: "change-me-in-production"
+      GIN_MODE: "debug"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      router:
+        condition: service_started
+
+  # ── Observability ─────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infrastructure/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # ── Frontend ──────────────────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: "http://localhost:8080"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  grafana_data:
