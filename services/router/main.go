@@ -30,7 +30,7 @@ func main() {
 	mux.HandleFunc("GET /workers", handleWorkers(registry))
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
 	log.Info("router starting", "port", port, "algorithm", algorithm, "workers", addrs)
@@ -93,7 +93,7 @@ func handleRoute(registry *WorkerRegistry, algorithm string, log *slog.Logger) h
 			Algorithm:     algo,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 
@@ -101,7 +101,7 @@ func handleWorkers(registry *WorkerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		workers := registry.All()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(workers)
+		_ = json.NewEncoder(w).Encode(workers)
 	}
 }
 

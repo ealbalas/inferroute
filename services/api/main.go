@@ -62,7 +62,7 @@ func main() {
 
 		// Protected by API key — inference endpoints
 		inference := v1.Group("")
-		inference.Use(middleware.APIKeyAuth())
+		inference.Use(middleware.APIKeyAuth(db))
 		inference.Use(middleware.RateLimit(redisClient, 10, time.Second))
 		{
 			inference.POST("/generate", handlers.Generate(db, redisClient, routerURL))

@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/inferroute/inferroute/internal/database"
@@ -40,24 +41,29 @@ func Requests(db *database.Pool) gin.HandlerFunc {
 		defer rows.Close()
 
 		type requestRow struct {
-			ID         string  `json:"id"`
-			WorkerID   string  `json:"worker_id"`
-			Model      string  `json:"model"`
-			StatusCode int     `json:"status_code"`
-			LatencyMS  int     `json:"latency_ms"`
-			Tokens     int     `json:"tokens"`
-			Cost       float64 `json:"cost"`
-			Cached     bool    `json:"cached"`
-			CreatedAt  string  `json:"created_at"`
+			ID         string    `json:"id"`
+			WorkerID   *string   `json:"worker_id"`
+			Model      string    `json:"model"`
+			StatusCode int       `json:"status_code"`
+			LatencyMS  int       `json:"latency_ms"`
+			Tokens     int       `json:"tokens"`
+			Cost       float64   `json:"cost"`
+			Cached     bool      `json:"cached"`
+			CreatedAt  time.Time `json:"created_at"`
 		}
 		var reqs []requestRow
 		for rows.Next() {
 			var r requestRow
 			if err := rows.Scan(&r.ID, &r.WorkerID, &r.Model, &r.StatusCode,
 				&r.LatencyMS, &r.Tokens, &r.Cost, &r.Cached, &r.CreatedAt); err != nil {
-				continue
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "scan error"})
+				return
 			}
 			reqs = append(reqs, r)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{"requests": reqs, "limit": limit, "offset": offset})
 	}
