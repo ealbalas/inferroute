@@ -104,7 +104,7 @@ func handleGenerate(log *slog.Logger) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 
@@ -128,7 +128,7 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 		Load:       load,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 type metricsResponse struct {
@@ -160,7 +160,7 @@ func handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		CPUCores:       runtime.NumCPU(),
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func getenv(key, fallback string) string {
